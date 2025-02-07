@@ -1,7 +1,7 @@
 import tkinter as tk
 from tkinter import filedialog, messagebox
-from tkinter import ttk  # 引入ttk模块
-from tkinterdnd2 import TkinterDnD, DND_FILES  # 引入tkinterdnd2
+from tkinter import ttk
+from tkinterdnd2 import TkinterDnD, DND_FILES
 import os
 import re
 import chardet
@@ -13,8 +13,8 @@ class NovelMergerApp:
         self.root.title("小说整合工具")
         
         # 设置窗口尺寸
-        window_width = 1500
-        window_height = 600
+        window_width = 1650
+        window_height = 800
         screen_width = self.root.winfo_screenwidth()
         screen_height = self.root.winfo_screenheight()
         x_position = (screen_width - window_width) // 2
@@ -26,7 +26,7 @@ class NovelMergerApp:
         self.root.tk.call('tk', 'scaling', 1.5)  # 设置缩放因子为1.5，根据需要调整
         
         # 设置字体为微软雅黑
-        font = ('Microsoft YaHei', 12)  # 设置为微软雅黑，大小为12
+        font = ('Microsoft YaHei', 12)
 
         # 初始化变量
         self.loaded_file = None
@@ -47,13 +47,30 @@ class NovelMergerApp:
         self.exit_button.grid(row=0, column=2, padx=5)
 
         # 布局：第二行 - 章节列表和内容显示
-        self.chapter_listbox = tk.Listbox(root, height=15, width=40, font=font)
-        self.chapter_listbox.grid(row=1, column=0, padx=10, pady=10, sticky="nsew")
+        self.chapter_frame = ttk.Frame(root)
+        self.chapter_frame.grid(row=1, column=0, padx=10, pady=10, sticky="nsew")
+
+        # 章节列表和滚动条
+        self.chapter_listbox = tk.Listbox(self.chapter_frame, height=20, width=40, font=font)
+        self.chapter_listbox.grid(row=0, column=0, sticky="nsew")
+
+        self.chapter_scrollbar = ttk.Scrollbar(self.chapter_frame, orient=tk.VERTICAL, command=self.chapter_listbox.yview)
+        self.chapter_scrollbar.grid(row=0, column=1, sticky="ns")
+        self.chapter_listbox.config(yscrollcommand=self.chapter_scrollbar.set)
+        
         self.chapter_listbox.bind("<<ListboxSelect>>", self.show_chapter_content)
-        
-        self.content_text = tk.Text(root, height=15, width=60, font=font)
-        self.content_text.grid(row=1, column=1, padx=10, pady=10, sticky="nsew")
-        
+
+        # 章节内容显示和滚动条
+        self.content_frame = ttk.Frame(root)
+        self.content_frame.grid(row=1, column=1, padx=10, pady=10, sticky="nsew")
+
+        self.content_text = tk.Text(self.content_frame, height=20, width=100, font=font)
+        self.content_text.grid(row=0, column=0, sticky="nsew")
+
+        self.content_scrollbar = ttk.Scrollbar(self.content_frame, orient=tk.VERTICAL, command=self.content_text.yview)
+        self.content_scrollbar.grid(row=0, column=1, sticky="ns")
+        self.content_text.config(yscrollcommand=self.content_scrollbar.set)
+
         # 布局：第三行 - 添加和删除章节按钮
         self.add_button = ttk.Button(root, text="添加", command=self.add_chapter)
         self.add_button.grid(row=2, column=0, padx=10, pady=10, sticky="ew")
@@ -68,7 +85,6 @@ class NovelMergerApp:
         self.log_text = tk.Text(self.log_frame, height=5, width=150, font=font, wrap=tk.WORD)
         self.log_text.grid(row=0, column=0, padx=10, pady=10, sticky="nsew")
 
-        # 添加滚动条
         self.scrollbar = ttk.Scrollbar(self.log_frame, orient=tk.VERTICAL, command=self.log_text.yview)
         self.scrollbar.grid(row=0, column=1, sticky="ns")
         self.log_text.config(yscrollcommand=self.scrollbar.set)
@@ -80,7 +96,7 @@ class NovelMergerApp:
         # 自适应窗口大小
         root.grid_rowconfigure(1, weight=1)
         root.grid_columnconfigure(0, weight=1)
-        root.grid_columnconfigure(1, weight=3)
+        root.grid_columnconfigure(1, weight=2)
 
     def open_file(self):
         file_path = filedialog.askopenfilename(filetypes=[("Text Files", "*.txt")])
@@ -214,7 +230,6 @@ class NovelMergerApp:
             self.chapter_listbox.selection_set(tk.END)
             self.content_text.delete(1.0, tk.END)
             self.content_text.insert(tk.END, new_content)
-
 
     def delete_chapter(self):
         selection = self.chapter_listbox.curselection()
