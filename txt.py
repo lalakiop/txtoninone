@@ -164,9 +164,26 @@ class NovelMergerApp:
     def add_chapter_from_file(self, file_path):
         with open(file_path, 'rb') as new_file:
             raw_data = new_file.read()
+
+            # 使用chardet检测文件编码
             encoding = chardet.detect(raw_data)['encoding']
-            new_content = raw_data.decode(encoding)
             
+            # 尝试解码，若解码失败则忽略错误
+            try:
+                new_content = raw_data.decode(encoding, errors='ignore')  # 忽略无法解码的字符
+            except UnicodeDecodeError:
+                # 如果解码失败，尝试其他常见编码
+                self.log(f"无法用 {encoding} 解码，尝试用其他编码...")
+                for enc in ['utf-8', 'gbk', 'gb2312', 'big5']:
+                    try:
+                        new_content = raw_data.decode(enc, errors='ignore')
+                        break
+                    except UnicodeDecodeError:
+                        continue
+                else:
+                    self.log(f"无法解码文件 {file_path}，请检查文件编码！")
+                    return  # 如果无法解码，退出
+
             # 检查并移除以 "第*章" 开头的行
             new_content_lines = new_content.split("\n")
             for i, line in enumerate(new_content_lines):
@@ -177,7 +194,20 @@ class NovelMergerApp:
             
             # 使用文件名创建新的章节名
             new_chapter_name = f"第{len(self.chapter_contents) + 1}章 - {os.path.splitext(os.path.basename(file_path))[0]}"
-            self.chapter_contents[new_chapter_name] = new_content
+
+            # 检查是否已存在相同章节
+            for chapter_name, content in self.chapter_contents.items():
+                if content == new_content:
+                    self.log(f"章节 '{new_chapter_name}' 已存在，跳过导入。")
+                    return  # 如果内容相同，则跳过
+
+            # 检查是否需要更新已有章节
+            if new_content > self.chapter_contents.get(new_chapter_name, ""):
+                self.chapter_contents[new_chapter_name] = new_content
+                self.log(f"章节 '{new_chapter_name}' 已更新。")
+            else:
+                self.chapter_contents[new_chapter_name] = new_content
+                self.log(f"章节 '{new_chapter_name}' 已添加。")
             
             # 更新列表框并显示内容
             self.chapter_listbox.insert(tk.END, new_chapter_name)
@@ -185,7 +215,6 @@ class NovelMergerApp:
             self.content_text.delete(1.0, tk.END)
             self.content_text.insert(tk.END, new_content)
 
-            self.log(f"章节 '{new_chapter_name}' 已添加")
 
     def delete_chapter(self):
         selection = self.chapter_listbox.curselection()
