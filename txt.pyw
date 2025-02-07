@@ -6,7 +6,7 @@ import os
 import re
 import chardet
 import ctypes
-from datetime import datetime
+
 
 class NovelMergerApp:
     def __init__(self, root):
@@ -111,85 +111,45 @@ class NovelMergerApp:
                 
                 # 重命名文件
                 os.rename(output_file, new_file_path)
-                self.log(f"文件已重命名为：{new_file_path}")
+                #print(f"文件已重命名为：{new_file_path}")
             else:
                 self.log(f"文件名不包含 '_utf8' 后缀。")
         
         except Exception as e:
            self.log(f"重命名过程中出现错误：{str(e)}")
-           
-           
-           
-    def record_file_times(self,file_path):
-        try:
-            # 获取文件的创建时间
-            creation_time = os.path.getctime(file_path)
-            # 获取文件的修改时间
-            modification_time = os.path.getmtime(file_path)
-
-            # 将时间戳转换为可读格式
-            creation_time = datetime.fromtimestamp(creation_time).strftime('%Y-%m-%d %H:%M:%S')
-            modification_time = datetime.fromtimestamp(modification_time).strftime('%Y-%m-%d %H:%M:%S') 
-            # 如果需要返回，也可以选择返回
-            return creation_time, modification_time
-        except Exception as e:
-            self.log(f"无法获取文件时间: {e}")  
-
-    
-    def restore_file_times(self,file_path, creation_time, modification_time):
-        try:
-            # 将创建时间和修改时间转换为时间戳
-            creation_timestamp = datetime.strptime(creation_time, '%Y-%m-%d %H:%M:%S').timestamp()
-            modification_timestamp = datetime.strptime(modification_time, '%Y-%m-%d %H:%M:%S').timestamp()
-
-            # 恢复文件的访问时间和修改时间
-            os.utime(file_path, (creation_timestamp, modification_timestamp))
-            
-            # 如果操作系统支持，也可以尝试恢复文件的创建时间（但是大多数操作系统不允许直接修改创建时间）
-            # 在大多数操作系统上，创建时间是不可更改的。
-
-            print(f"文件 {file_path} 的时间已恢复！")
-        except Exception as e:
-            print(f"无法恢复文件时间: {e}")    
-
-    
+        
     def open_file(self):
         file_path = filedialog.askopenfilename(filetypes=[("Text Files", "*.txt")])
-        
         with open(file_path, 'rb') as f:
             raw_data = f.read()
             result = chardet.detect(raw_data)
             encoding = result['encoding']
-            print(encoding)
-        if not encoding or encoding.lower() != 'utf-8':
-            #记录文件的时间
-            filecreation_time,filemodification_time=self.record_file_times(file_path)
-            # 编码备选列表
-            encodings = [encoding, 'utf-8', 'gbk', 'gb2312', 'big5']
 
-            # 尝试逐个编码读取文件
-            text = None
-            for enc in encodings:
-                try:
-                    with open(file_path, 'r', encoding=enc) as f:
-                        text = f.read()
-                    self.log(f"成功使用编码 {enc} 读取文件")
-                    break
-                except (UnicodeDecodeError, TypeError):
-                    self.log(f"使用编码 {enc} 读取文件失败")
+        # 编码备选列表
+        encodings = [encoding, 'utf-8', 'gbk', 'gb2312', 'big5']
 
-            if text is None:
-                self.log("所有编码尝试均失败，无法读取文件")
-                return
-            output_file = file_path.replace('.txt', '_utf8.txt')
-            # 将内容保存为UTF-8编码
-            with open(output_file, 'w', encoding='utf-8') as f:
-                f.write(text)
-            os.remove(file_path)
-            self.rename_to_original(output_file) 
-            #恢复文件的时间
-            self.restore_file_times(file_path,filecreation_time,filemodification_time)
+        # 尝试逐个编码读取文件
+        text = None
+        for enc in encodings:
+            try:
+                with open(file_path, 'r', encoding=enc) as f:
+                    text = f.read()
+                self.log(f"成功使用编码 {enc} 读取文件")
+                break
+            except (UnicodeDecodeError, TypeError):
+                self.log(f"使用编码 {enc} 读取文件失败")
 
+        if text is None:
+            self.log("所有编码尝试均失败，无法读取文件")
+            return
+        output_file = file_path.replace('.txt', '_utf8.txt')
+        # 将内容保存为UTF-8编码
+        with open(output_file, 'w', encoding='utf-8') as f:
+            f.write(text)
+        os.remove(file_path)
+        self.rename_to_original(output_file)    
+        
+        if file_path:
             with open(file_path, 'rb') as file:
                 raw_data = file.read()
                 encoding = chardet.detect(raw_data)['encoding']
@@ -226,50 +186,6 @@ class NovelMergerApp:
 
                 # Log the action
                 self.log("文件已打开")
-        else:
-            self.log(f"文件是utf-8编码")
-            with open(file_path, 'rb') as file:
-                raw_data = file.read()
-                encoding = chardet.detect(raw_data)['encoding']
-                content = raw_data.decode(encoding)
-
-                self.chapter_list = []
-                self.chapter_contents = {}
-                
-                
-                # 按章节拆分内容
-                chapters = content.split('\n')
-                chapter_name = None
-                chapter_content = []
-                
-                for line in chapters:
-                    if re.match(r"^第(\d+|[一二三四五六七八九十]+)章|^正文$", line.strip()):
-                        if chapter_name:
-                            self.chapter_contents[chapter_name] = "\n".join(chapter_content)
-                        chapter_name = line.strip()
-                        chapter_content = []
-                    else:
-                        chapter_content.append(line.strip())
-                
-                # 添加最后一章
-                if chapter_name:
-                    self.chapter_contents[chapter_name] = "\n".join(chapter_content)
-                
-                # 更新章节列表
-                self.chapter_listbox.delete(0, tk.END)
-                for chapter in self.chapter_contents.keys():
-                    self.chapter_listbox.insert(tk.END, chapter)
-                
-                self.loaded_file = file_path
-
-                # Log the action
-                self.log("文件已打开")
-        
-            
-            
-        
-        
-            
 
     def show_chapter_content(self, event):
         selection = self.chapter_listbox.curselection()
