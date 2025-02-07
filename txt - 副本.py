@@ -7,7 +7,6 @@ import re
 import chardet
 import ctypes
 from datetime import datetime
-import configparser
 
 class NovelMergerApp:
     def __init__(self, root):
@@ -35,10 +34,6 @@ class NovelMergerApp:
         self.chapter_list = []
         self.chapter_contents = {}
 
-        # 初始化历史记录
-        self.history_file = os.path.join(os.path.dirname(__file__), "data.ini")
-        self.history = self.load_history()
-
         # 布局：第一行 - 按钮和历史记录下拉框放入一个容器中
         self.container_frame = ttk.Frame(root)  # 创建一个新的容器
         self.container_frame.grid(row=0, column=0, padx=10, pady=10, sticky="ew")
@@ -63,10 +58,14 @@ class NovelMergerApp:
         # 下拉框（暂时为空）
         self.history_combobox = ttk.Combobox(self.container_frame, state="readonly")
         self.history_combobox.grid(row=0, column=2, padx=5, sticky="ew")  # 增加sticky="ew"
-        self.history_combobox.bind("<<ComboboxSelected>>", self.on_history_select)
 
-        # 初始化下拉框
-        self.update_history_combobox()
+        # 初始化下拉框为空
+        self.history_combobox['values'] = []  # 这里可以根据需要填充历史记录数据
+        
+        # 动态调整下拉框宽度（根据内容）
+        if self.history_combobox['values']:
+            max_length = max(len(str(item)) for item in self.history_combobox['values'])
+            self.history_combobox.config(width=max_length)
 
         # 布局：第二行 - 章节列表和内容显示放入一个容器中
         self.chapter_container_frame = ttk.Frame(root)  # 创建第二行的容器
@@ -141,35 +140,8 @@ class NovelMergerApp:
         self.button_container_frame.grid_columnconfigure(1, weight=1)
 
 
-    def load_history(self):
-        """加载历史记录"""
-        config = configparser.ConfigParser()
-        if os.path.exists(self.history_file):
-            config.read(self.history_file)
-            if 'History' in config:
-                return dict(config['History'])
-        return {}
 
-    def save_history(self):
-        """保存历史记录"""
-        config = configparser.ConfigParser()
-        config['History'] = self.history
-        with open(self.history_file, 'w') as configfile:
-            config.write(configfile)
-
-    def update_history_combobox(self):
-        """更新历史记录下拉框"""
-        self.history_combobox['values'] = list(self.history.keys())
-        if self.history_combobox['values']:
-            max_length = max(len(str(item)) for item in self.history_combobox['values'])
-            self.history_combobox.config(width=max_length)
-
-    def on_history_select(self, event):
-        """当用户选择历史记录时，打开对应的文件"""
-        selected_file_name = self.history_combobox.get()
-        if selected_file_name in self.history:
-            file_path = self.history[selected_file_name]
-            self.open_file(file_path)
+    
     
     
     def rename_to_original(self,output_file):
@@ -224,18 +196,8 @@ class NovelMergerApp:
             print(f"无法恢复文件时间: {e}")    
 
     
-    def open_file(self, file_path=None):
-        if file_path is None:
-            file_path = filedialog.askopenfilename(filetypes=[("Text Files", "*.txt")])
-        
-        if not file_path:
-            return
-
-        # 记录文件路径到历史记录
-        file_name = os.path.basename(file_path)
-        self.history[file_name] = file_path
-        self.save_history()
-        self.update_history_combobox()
+    def open_file(self):
+        file_path = filedialog.askopenfilename(filetypes=[("Text Files", "*.txt")])
         
         with open(file_path, 'rb') as f:
             raw_data = f.read()
@@ -467,7 +429,7 @@ class NovelMergerApp:
 
         # 确保路径指向的是一个txt文件
         if file_path.endswith(".txt"):  
-            self.add_chapter_from_file(file_path)  # 如果是txt文件，调用·方法添加章节
+            self.add_chapter_from_file(file_path)  # 如果是txt文件，调用方法添加章节
         else:
             self.log("请拖放一个有效的txt文件！")  # 如果不是txt文件，弹出警告
 

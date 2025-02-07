@@ -7,6 +7,7 @@ import re
 import chardet
 import ctypes
 from datetime import datetime
+import configparser
 
 class NovelMergerApp:
     def __init__(self, root):
@@ -34,10 +35,18 @@ class NovelMergerApp:
         self.chapter_list = []
         self.chapter_contents = {}
 
-        # 布局：第一行 - 按钮
-        self.button_frame = ttk.Frame(root)
-        self.button_frame.grid(row=0, column=0, padx=10, pady=10, sticky="ew")
+        # 初始化历史记录
+        self.history_file = os.path.join(os.path.dirname(__file__), "data.ini")
+        self.history = self.load_history()
+
+        # 布局：第一行 - 按钮和历史记录下拉框放入一个容器中
+        self.container_frame = ttk.Frame(root)  # 创建一个新的容器
+        self.container_frame.grid(row=0, column=0, padx=10, pady=10, sticky="ew")
         
+        # 按钮框架
+        self.button_frame = ttk.Frame(self.container_frame)
+        self.button_frame.grid(row=0, column=0, padx=10, pady=10, sticky="ew")
+
         self.open_button = ttk.Button(self.button_frame, text="打开文件", command=self.open_file)
         self.open_button.grid(row=0, column=0, padx=5)
         
@@ -46,12 +55,27 @@ class NovelMergerApp:
         
         self.exit_button = ttk.Button(self.button_frame, text="退出", command=self.exit_app)
         self.exit_button.grid(row=0, column=2, padx=5)
+        
+        # 历史记录文本标签
+        self.history_label = ttk.Label(self.container_frame, text="历史记录:")
+        self.history_label.grid(row=0, column=1, padx=5)
 
-        # 布局：第二行 - 章节列表和内容显示
-        self.chapter_frame = ttk.Frame(root)
-        self.chapter_frame.grid(row=1, column=0, padx=10, pady=10, sticky="nsew")
+        # 下拉框（暂时为空）
+        self.history_combobox = ttk.Combobox(self.container_frame, state="readonly")
+        self.history_combobox.grid(row=0, column=2, padx=5, sticky="ew")  # 增加sticky="ew"
+        self.history_combobox.bind("<<ComboboxSelected>>", self.on_history_select)
+
+        # 初始化下拉框
+        self.update_history_combobox()
+
+        # 布局：第二行 - 章节列表和内容显示放入一个容器中
+        self.chapter_container_frame = ttk.Frame(root)  # 创建第二行的容器
+        self.chapter_container_frame.grid(row=1, column=0, padx=10, pady=10, sticky="nsew")
 
         # 章节列表和滚动条
+        self.chapter_frame = ttk.Frame(self.chapter_container_frame)
+        self.chapter_frame.grid(row=0, column=0, padx=10, pady=10, sticky="nsew")
+
         self.chapter_listbox = tk.Listbox(self.chapter_frame, height=20, width=40, font=font)
         self.chapter_listbox.grid(row=0, column=0, sticky="nsew")
 
@@ -62,8 +86,8 @@ class NovelMergerApp:
         self.chapter_listbox.bind("<<ListboxSelect>>", self.show_chapter_content)
 
         # 章节内容显示和滚动条
-        self.content_frame = ttk.Frame(root)
-        self.content_frame.grid(row=1, column=1, padx=10, pady=10, sticky="nsew")
+        self.content_frame = ttk.Frame(self.chapter_container_frame)
+        self.content_frame.grid(row=0, column=1, padx=10, pady=10, sticky="nsew")
 
         self.content_text = tk.Text(self.content_frame, height=20, width=100, font=font)
         self.content_text.grid(row=0, column=0, sticky="nsew")
@@ -72,12 +96,15 @@ class NovelMergerApp:
         self.content_scrollbar.grid(row=0, column=1, sticky="ns")
         self.content_text.config(yscrollcommand=self.content_scrollbar.set)
 
-        # 布局：第三行 - 添加和删除章节按钮
-        self.add_button = ttk.Button(root, text="添加", command=self.add_chapter)
-        self.add_button.grid(row=2, column=0, padx=10, pady=10, sticky="ew")
+        # 布局：第三行 - 添加和删除章节按钮放入一个容器中
+        self.button_container_frame = ttk.Frame(root)  # 创建第三行的容器
+        self.button_container_frame.grid(row=2, column=0, padx=10, pady=10, sticky="ew")
+
+        self.add_button = ttk.Button(self.button_container_frame, text="添加", command=self.add_chapter)
+        self.add_button.grid(row=0, column=0, padx=10, pady=10, sticky="ew")
         
-        self.delete_button = ttk.Button(root, text="删除", command=self.delete_chapter)
-        self.delete_button.grid(row=2, column=1, padx=10, pady=10, sticky="ew")
+        self.delete_button = ttk.Button(self.button_container_frame, text="删除", command=self.delete_chapter)
+        self.delete_button.grid(row=0, column=1, padx=10, pady=10, sticky="ew")
         
         # 布局：第四行 - 日志显示区域
         self.log_frame = ttk.Frame(root)
@@ -98,7 +125,51 @@ class NovelMergerApp:
         root.grid_rowconfigure(1, weight=1)
         root.grid_columnconfigure(0, weight=1)
         root.grid_columnconfigure(1, weight=2)
-    
+
+        # 调整按钮列宽，确保每个按钮的大小相等
+        self.container_frame.grid_columnconfigure(0, weight=1)
+        self.container_frame.grid_columnconfigure(1, weight=1)
+        self.container_frame.grid_columnconfigure(2, weight=1)
+        self.container_frame.grid_columnconfigure(3, weight=1)
+        self.container_frame.grid_columnconfigure(4, weight=2)
+
+        self.chapter_container_frame.grid_rowconfigure(0, weight=1)
+        self.chapter_container_frame.grid_columnconfigure(0, weight=1)
+        self.chapter_container_frame.grid_columnconfigure(1, weight=2)
+
+        self.button_container_frame.grid_columnconfigure(0, weight=1)
+        self.button_container_frame.grid_columnconfigure(1, weight=1)
+
+
+    def load_history(self):
+        """加载历史记录"""
+        config = configparser.ConfigParser()
+        if os.path.exists(self.history_file):
+            config.read(self.history_file)
+            if 'History' in config:
+                return dict(config['History'])
+        return {}
+
+    def save_history(self):
+        """保存历史记录"""
+        config = configparser.ConfigParser()
+        config['History'] = self.history
+        with open(self.history_file, 'w') as configfile:
+            config.write(configfile)
+
+    def update_history_combobox(self):
+        """更新历史记录下拉框"""
+        self.history_combobox['values'] = list(self.history.keys())
+        if self.history_combobox['values']:
+            max_length = max(len(str(item)) for item in self.history_combobox['values'])
+            self.history_combobox.config(width=max_length)
+
+    def on_history_select(self, event):
+        """当用户选择历史记录时，打开对应的文件"""
+        selected_file_name = self.history_combobox.get()
+        if selected_file_name in self.history:
+            file_path = self.history[selected_file_name]
+            self.open_file(file_path)
     
     
     def rename_to_original(self,output_file):
@@ -153,8 +224,18 @@ class NovelMergerApp:
             print(f"无法恢复文件时间: {e}")    
 
     
-    def open_file(self):
-        file_path = filedialog.askopenfilename(filetypes=[("Text Files", "*.txt")])
+    def open_file(self, file_path=None):
+        if file_path is None:
+            file_path = filedialog.askopenfilename(filetypes=[("Text Files", "*.txt")])
+        
+        if not file_path:
+            return
+
+        # 记录文件路径到历史记录
+        file_name = os.path.basename(file_path)
+        self.history[file_name] = file_path
+        self.save_history()
+        self.update_history_combobox()
         
         with open(file_path, 'rb') as f:
             raw_data = f.read()
@@ -386,7 +467,7 @@ class NovelMergerApp:
 
         # 确保路径指向的是一个txt文件
         if file_path.endswith(".txt"):  
-            self.add_chapter_from_file(file_path)  # 如果是txt文件，调用方法添加章节
+            self.add_chapter_from_file(file_path)  # 如果是txt文件，调用·方法添加章节
         else:
             self.log("请拖放一个有效的txt文件！")  # 如果不是txt文件，弹出警告
 
