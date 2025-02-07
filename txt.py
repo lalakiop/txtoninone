@@ -7,7 +7,7 @@ import re
 import chardet
 import ctypes
 from datetime import datetime
-import configparser
+import configparser  # 用于读取和写入 ini 文件
 
 class NovelMergerApp:
     def __init__(self, root):
@@ -16,7 +16,7 @@ class NovelMergerApp:
         
         # 设置窗口尺寸
         window_width = 1650
-        window_height = 800
+        window_height = 850
         screen_width = self.root.winfo_screenwidth()
         screen_height = self.root.winfo_screenheight()
         x_position = (screen_width - window_width) // 2
@@ -34,10 +34,6 @@ class NovelMergerApp:
         self.loaded_file = None
         self.chapter_list = []
         self.chapter_contents = {}
-
-        # 初始化历史记录
-        self.history_file = os.path.join(os.path.dirname(__file__), "data.ini")
-        self.history = self.load_history()
 
         # 布局：第一行 - 按钮和历史记录下拉框放入一个容器中
         self.container_frame = ttk.Frame(root)  # 创建一个新的容器
@@ -61,13 +57,11 @@ class NovelMergerApp:
         self.history_label.grid(row=0, column=1, padx=5)
 
         # 下拉框（暂时为空）
-        self.history_combobox = ttk.Combobox(self.container_frame, state="readonly")
-        self.history_combobox.grid(row=0, column=2, padx=5, sticky="ew")  # 增加sticky="ew"
-        self.history_combobox.bind("<<ComboboxSelected>>", self.on_history_select)
-
-        # 初始化下拉框
-        self.update_history_combobox()
-
+        self.history_dropdown = ttk.Combobox(self.container_frame, state="readonly")
+        self.history_dropdown.grid(row=0, column=2, padx=5, sticky="ew")  # 增加sticky="ew"
+        self.history_dropdown.bind("<<ComboboxSelected>>", self.select_history)
+        # 初始化历史记录
+        self.update_history_dropdown()
         # 布局：第二行 - 章节列表和内容显示放入一个容器中
         self.chapter_container_frame = ttk.Frame(root)  # 创建第二行的容器
         self.chapter_container_frame.grid(row=1, column=0, padx=10, pady=10, sticky="nsew")
@@ -141,37 +135,77 @@ class NovelMergerApp:
         self.button_container_frame.grid_columnconfigure(1, weight=1)
 
 
-    def load_history(self):
-        """加载历史记录"""
-        config = configparser.ConfigParser()
-        if os.path.exists(self.history_file):
-            config.read(self.history_file)
-            if 'History' in config:
-                return dict(config['History'])
-        return {}
 
-    def save_history(self):
-        """保存历史记录"""
+    def read_history(self):
+        """读取历史记录"""
+        if not os.path.exists("data.ini"):
+            return {}
+        
         config = configparser.ConfigParser()
-        config['History'] = self.history
-        with open(self.history_file, 'w') as configfile:
+        config.read("data.ini")
+        history = {}
+        
+        for section in config.sections():
+            history[section] = config.get(section, "path")
+        
+        return history
+    
+    def save_history(self, file_path):
+        """保存历史记录，最多保留10个文件"""
+        config = configparser.ConfigParser()
+
+        # 读取现有历史记录
+        history = self.read_history()
+
+        # 获取文件名作为历史记录的键
+        file_name = os.path.basename(file_path)
+
+        # 避免重复记录
+        if file_name in history:
+            return  # 如果文件已在历史记录中，直接返回
+        
+        # 如果历史记录超过10个，移除最旧的记录
+        if len(history) >= 10:
+            oldest_file = list(history.keys())[0]
+            history.pop(oldest_file)
+
+        # 新文件记录
+        history[file_name] = file_path
+        
+        # 清除原有历史记录并保存新记录
+        for file_name, path in history.items():
+            config[file_name] = {"path": path}
+
+        # 保存到 data.ini 文件
+        with open("data.ini", "w") as configfile:
             config.write(configfile)
-
-    def update_history_combobox(self):
+    
+    
+    
+    def update_history_dropdown(self):
         """更新历史记录下拉框"""
-        self.history_combobox['values'] = list(self.history.keys())
-        if self.history_combobox['values']:
-            max_length = max(len(str(item)) for item in self.history_combobox['values'])
-            self.history_combobox.config(width=max_length)
+        history = self.read_history()
+        history_list = list(history.keys())
+        self.history_dropdown["values"] = history_list
+        if history_list:
+            self.history_dropdown.current(0)
+            
+    
 
-    def on_history_select(self, event):
-        """当用户选择历史记录时，打开对应的文件"""
-        selected_file_name = self.history_combobox.get()
-        if selected_file_name in self.history:
-            file_path = self.history[selected_file_name]
-            self.open_file(file_path)
-    
-    
+
+    def select_history(self, event):
+        """从历史记录中选择文件并显示内容"""
+        selected_file = self.history_dropdown.get()
+        if selected_file:
+            # 获取选中文件的路径
+            history = self.read_history()
+            file_path = history.get(selected_file)
+            
+            if file_path:
+                # 打开选中的文件
+                self.open_file2(file_path)
+                
+            
     def rename_to_original(self,output_file):
         """将文件重命名为去除 _utf8_simplified 后缀的文件名"""
         try:
@@ -219,29 +253,23 @@ class NovelMergerApp:
             # 如果操作系统支持，也可以尝试恢复文件的创建时间（但是大多数操作系统不允许直接修改创建时间）
             # 在大多数操作系统上，创建时间是不可更改的。
 
-            print(f"文件 {file_path} 的时间已恢复！")
+            #print(f"文件 {file_path} 的时间已恢复！")
         except Exception as e:
-            print(f"无法恢复文件时间: {e}")    
-
+            #print(f"无法恢复文件时间: {e}")    
+            pass
     
-    def open_file(self, file_path=None):
-        if file_path is None:
-            file_path = filedialog.askopenfilename(filetypes=[("Text Files", "*.txt")])
-        
-        if not file_path:
-            return
-
-        # 记录文件路径到历史记录
-        file_name = os.path.basename(file_path)
-        self.history[file_name] = file_path
-        self.save_history()
-        self.update_history_combobox()
-        
+    def open_file(self,file_path=None):
+        file_path = filedialog.askopenfilename(filetypes=[("Text Files", "*.txt")])
+        if file_path:
+            # 更新历史记录
+            self.save_history(file_path)   
+            # 更新下拉框
+            self.update_history_dropdown()
         with open(file_path, 'rb') as f:
             raw_data = f.read()
             result = chardet.detect(raw_data)
             encoding = result['encoding']
-            print(encoding)
+            #print(encoding)
         if not encoding or encoding.lower() != 'utf-8':
             #记录文件的时间
             filecreation_time,filemodification_time=self.record_file_times(file_path)
@@ -346,7 +374,117 @@ class NovelMergerApp:
                 # Log the action
                 self.log("文件已打开")
         
-            
+    def open_file2(self,file_path):
+        file_path = file_path
+       
+        with open(file_path, 'rb') as f:
+            raw_data = f.read()
+            result = chardet.detect(raw_data)
+            encoding = result['encoding']
+            #print(encoding)
+        if not encoding or encoding.lower() != 'utf-8':
+            #记录文件的时间
+            filecreation_time,filemodification_time=self.record_file_times(file_path)
+            # 编码备选列表
+            encodings = [encoding, 'utf-8', 'gbk', 'gb2312', 'big5']
+
+            # 尝试逐个编码读取文件
+            text = None
+            for enc in encodings:
+                try:
+                    with open(file_path, 'r', encoding=enc) as f:
+                        text = f.read()
+                    self.log(f"成功使用编码 {enc} 读取文件")
+                    break
+                except (UnicodeDecodeError, TypeError):
+                    self.log(f"使用编码 {enc} 读取文件失败")
+
+            if text is None:
+                self.log("所有编码尝试均失败，无法读取文件")
+                return
+            output_file = file_path.replace('.txt', '_utf8.txt')
+            # 将内容保存为UTF-8编码
+            with open(output_file, 'w', encoding='utf-8') as f:
+                f.write(text)
+            os.remove(file_path)
+            self.rename_to_original(output_file) 
+            #恢复文件的时间
+            self.restore_file_times(file_path,filecreation_time,filemodification_time)
+
+            with open(file_path, 'rb') as file:
+                raw_data = file.read()
+                encoding = chardet.detect(raw_data)['encoding']
+                content = raw_data.decode(encoding)
+
+                self.chapter_list = []
+                self.chapter_contents = {}
+                
+                
+                # 按章节拆分内容
+                chapters = content.split('\n')
+                chapter_name = None
+                chapter_content = []
+                
+                for line in chapters:
+                    if re.match(r"^第(\d+|[一二三四五六七八九十]+)章|^正文$", line.strip()):
+                        if chapter_name:
+                            self.chapter_contents[chapter_name] = "\n".join(chapter_content)
+                        chapter_name = line.strip()
+                        chapter_content = []
+                    else:
+                        chapter_content.append(line.strip())
+                
+                # 添加最后一章
+                if chapter_name:
+                    self.chapter_contents[chapter_name] = "\n".join(chapter_content)
+                
+                # 更新章节列表
+                self.chapter_listbox.delete(0, tk.END)
+                for chapter in self.chapter_contents.keys():
+                    self.chapter_listbox.insert(tk.END, chapter)
+                
+                self.loaded_file = file_path
+
+                # Log the action
+                self.log("文件已打开")
+        else:
+            self.log(f"文件是utf-8编码")
+            with open(file_path, 'rb') as file:
+                raw_data = file.read()
+                encoding = chardet.detect(raw_data)['encoding']
+                content = raw_data.decode(encoding)
+
+                self.chapter_list = []
+                self.chapter_contents = {}
+                
+                
+                # 按章节拆分内容
+                chapters = content.split('\n')
+                chapter_name = None
+                chapter_content = []
+                
+                for line in chapters:
+                    if re.match(r"^第(\d+|[一二三四五六七八九十]+)章|^正文$", line.strip()):
+                        if chapter_name:
+                            self.chapter_contents[chapter_name] = "\n".join(chapter_content)
+                        chapter_name = line.strip()
+                        chapter_content = []
+                    else:
+                        chapter_content.append(line.strip())
+                
+                # 添加最后一章
+                if chapter_name:
+                    self.chapter_contents[chapter_name] = "\n".join(chapter_content)
+                
+                # 更新章节列表
+                self.chapter_listbox.delete(0, tk.END)
+                for chapter in self.chapter_contents.keys():
+                    self.chapter_listbox.insert(tk.END, chapter)
+                
+                self.loaded_file = file_path
+
+                # Log the action
+                self.log("文件已打开")        
             
         
         
@@ -467,7 +605,7 @@ class NovelMergerApp:
 
         # 确保路径指向的是一个txt文件
         if file_path.endswith(".txt"):  
-            self.add_chapter_from_file(file_path)  # 如果是txt文件，调用·方法添加章节
+            self.add_chapter_from_file(file_path)  # 如果是txt文件，调用方法添加章节
         else:
             self.log("请拖放一个有效的txt文件！")  # 如果不是txt文件，弹出警告
 
