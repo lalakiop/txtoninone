@@ -352,7 +352,7 @@ class NovelMergerApp:
                 chapter_content = []
                 
                 for line in chapters:
-                    if re.match(r"^^第(\d+|[一二三四五六七八九十]+)章.*|^正文.*$", line.strip()):
+                    if re.match(r"^第(\d+|[一二三四五六七八九十]+)章.*|^\s*正文.*$", line.strip()):
                         if chapter_name:
                             self.chapter_contents[chapter_name] = "\n".join(chapter_content)
                         chapter_name = line.strip()
