@@ -114,7 +114,7 @@ class NovelMergerApp:
         # 启用拖放功能
         self.root.drop_target_register(DND_FILES)  # 注册拖放文件目标
         self.root.dnd_bind('<<Drop>>', self.on_file_drop)  # 绑定拖放事件
-        
+        self.chapter_listbox.bind("<Delete>", lambda event: self.delete_chapter())#绑定删除按钮
         # 自适应窗口大小
         root.grid_rowconfigure(1, weight=1)
         root.grid_columnconfigure(0, weight=1)
