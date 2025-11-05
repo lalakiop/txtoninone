@@ -1,2 +1,2 @@
 @echo off
-pythonw txt.pyw
+pythonw txt.py
